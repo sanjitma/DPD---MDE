@@ -1,5 +1,3 @@
-Here's a comprehensive README file content for your project, formatted in Markdown.
-
 ```markdown
 # DPD-MDE: Digital Pre-Distortion with Modified Differential Evolution (CUDA Accelerated)
 
