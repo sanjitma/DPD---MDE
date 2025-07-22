@@ -90,6 +90,40 @@ __global__ void dac_qm_kernel(
     }
 }
 
+// CUDA kernel for Amplifier (Saleh model)
+__global__ void amplifier_kernel(
+    const data_t *duc_in,
+    data_t *amp_i_out, data_t *amp_q_out,
+    data_t *amp_mag_out, data_t *amp_gain_lin_out, data_t *amp_gain_db_out,
+    int total_samples
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < total_samples) {
+        data_t local_amp_i, local_amp_q, local_amp_mag, local_amp_gain_lin, local_amp_gain_db;
+        saleh_amplifier(
+            duc_in[idx],
+            0.0f, // Assuming Q input is 0 based on original usage
+            local_amp_i, local_amp_q, local_amp_mag, local_amp_gain_lin, local_amp_gain_db
+        );
+        amp_i_out[idx] = local_amp_i;
+        amp_q_out[idx] = local_amp_q;
+        amp_mag_out[idx] = local_amp_mag;
+        amp_gain_lin_out[idx] = local_amp_gain_lin;
+        amp_gain_db_out[idx] = local_amp_gain_db;
+    }
+}
+
+// CUDA kernel for normalization
+__global__ void normalize_kernel(
+    fixed_t *i_fb_in_out, fixed_t *q_fb_in_out, double factor, int len
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < len) {
+        i_fb_in_out[idx] = (fixed_t)((double)i_fb_in_out[idx] * factor);
+        q_fb_in_out[idx] = (fixed_t)((double)q_fb_in_out[idx] * factor);
+    }
+}
+
 
 // Host function that orchestrates the entire circuit
 void circuit_final(
@@ -214,27 +248,6 @@ void circuit_final(
         // Amplifier (Saleh model)
         int amp_total_samples = DATA_LEN * INTERPOLATION_FACTOR;
         blocksPerGrid = (amp_total_samples + threadsPerBlock - 1) / threadsPerBlock;
-        __global__ void amplifier_kernel(
-            const data_t *duc_in,
-            data_t *amp_i_out, data_t *amp_q_out,
-            data_t *amp_mag_out, data_t *amp_gain_lin_out, data_t *amp_gain_db_out,
-            int total_samples
-        ) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx < total_samples) {
-                data_t local_amp_i, local_amp_q, local_amp_mag, local_amp_gain_lin, local_amp_gain_db;
-                saleh_amplifier(
-                    duc_in[idx],
-                    0.0f, // Assuming Q input is 0 based on original usage
-                    local_amp_i, local_amp_q, local_amp_mag, local_amp_gain_lin, local_amp_gain_db
-                );
-                amp_i_out[idx] = local_amp_i;
-                amp_q_out[idx] = local_amp_q;
-                amp_mag_out[idx] = local_amp_mag;
-                amp_gain_lin_out[idx] = local_amp_gain_lin;
-                amp_gain_db_out[idx] = local_amp_gain_db;
-            }
-        }
         amplifier_kernel<<<blocksPerGrid, threadsPerBlock>>>(
             d_duc_out,
             d_amp_out_i, d_amp_out_q, d_amp_magnitude, d_amp_gain_lin, d_amp_gain_db,
@@ -293,15 +306,6 @@ void circuit_final(
         double norm_factor = (fb_rms > 1e-12) ? (ff_rms / fb_rms) : 1.0;
 
         blocksPerGrid = (ADC_LEN + threadsPerBlock - 1) / threadsPerBlock;
-        __global__ void normalize_kernel(
-            fixed_t *i_fb_in_out, fixed_t *q_fb_in_out, double factor, int len
-        ) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx < len) {
-                i_fb_in_out[idx] = (fixed_t)((double)i_fb_in_out[idx] * factor);
-                q_fb_in_out[idx] = (fixed_t)((double)q_fb_in_out[idx] * factor);
-            }
-        }
         normalize_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_i_psf_fb_device, d_q_psf_fb_device, norm_factor, ADC_LEN);
         CUDA_CHECK(cudaDeviceSynchronize());
 
