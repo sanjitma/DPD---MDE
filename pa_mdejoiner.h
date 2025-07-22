@@ -4,7 +4,8 @@
 #include "mde.h"
 
 // Saleh amplifier model
-void saleh_amplifier(
+// Added __host__ __device__ to the declaration to match the definition
+__host__ __device__ void saleh_amplifier(
     data_t in_i,
     data_t in_q,
     data_t& out_i,
