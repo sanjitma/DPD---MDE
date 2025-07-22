@@ -1,56 +1,76 @@
-#include "pa_mdejoiner.h"
+#include <stdint.h>
 #include <cmath>
-// #include <iostream> // Removed for device code compatibility
 
-// Add __host__ __device__ to allow calling from both host and device
-__host__ __device__ void saleh_amplifier(
-    data_t in_i,
-    data_t in_q,
-    data_t& out_i,
-    data_t& out_q,
-    data_t& magnitude,
-    data_t& gain_lin,
-    data_t& gain_db
-) {
-    // Saleh model parameters
-    const float alpha_a = 4.0f;  // Amplitude coefficient
-    const float beta_a = 0.7f;   // Amplitude coefficient
-    const float alpha_p = 0.15f; // Phase coefficient
-    const float beta_p = 0.25f;  // Phase coefficient
+#define DATA_LEN 8192
+#define NUM_WEIGHTS 41
+#define SPS 25
+#define ALPHA 0.5
 
-    // Calculate input magnitude using CUDA-compatible functions
-    float i_float = in_i;
-    float q_float = in_q;
-    float r = sqrtf(i_float*i_float + q_float*q_float);
+typedef float fixed_t;
 
-    // Calculate input phase using CUDA-compatible functions
-    float phi = atan2f(q_float, i_float);
+// CUDA-compatible raised cosine filter
+// Removed 'default' keyword as it's not standard C++ or CUDA syntax.
+__host__ __device__ void raised_cosine_filter(fixed_t rc[NUM_WEIGHTS]) {
+    const float PI = 3.14159f;
+    const float ALPHA_FIXED = ALPHA;
+    const float EPS = 1e-5f;
+    const float EPS_X = 1e-3f;
+    const float SCALE = 0.9999f;
 
-    // Saleh model for amplitude
-    float A_r = (alpha_a * r) / (1 + beta_a * r * r);
+    int mid = NUM_WEIGHTS / 2;
+    // float sum = 0.001f; // This sum variable was unused for normalization, removed.
 
-    // Saleh model for phase
-    float P_r = (alpha_p * r * r) / (1 + beta_p * r * r);
+    for (int i = 0; i < NUM_WEIGHTS; i++) {
+        float idx = (float)(i - mid);
+        float x = SCALE * idx / (float)SPS;
+        float pi_x = PI * x;
 
-    // Convert back to I/Q using CUDA-compatible functions
-    float out_i_float = A_r * cosf(phi + P_r);
-    float out_q_float = A_r * sinf(phi + P_r);
+        float sinc_val = (fabsf(x) < EPS_X) ? 1.0f : sinf(pi_x) / pi_x;
 
-    // FIX: Multiply by 3.4 to scale from ±2.36 to ±8 range
-    out_i_float *= 5.0f;
-    out_q_float *= 5.0f;
+        float denom = 1.0f - 4.0f * ALPHA_FIXED * ALPHA_FIXED * x * x;
+        if (fabsf(denom) < EPS)
+            denom = EPS; // Prevent division by zero
 
-    // Set output
-    out_i = (data_t)out_i_float;
-    out_q = (data_t)out_q_float;
-    magnitude = (data_t)A_r;
+        float angle = PI * ALPHA_FIXED * x;
+        float cos_part = cosf(angle);
 
-    // Calculate gain
-    if (r > 0.001f) {
-        gain_lin = (data_t)(A_r / r);
-        gain_db = (data_t)(20 * log10f(A_r / r));
-    } else {
-        gain_lin = (data_t)1.0f;
-        gain_db = (data_t)0.0f;
+        rc[i] = sinc_val * (cos_part / denom);
+        // sum += rc[i]; // This sum was not used in the original normalization logic
     }
+
+    // Normalize so the peak (max absolute value) is 1
+    float max_abs = 0.0f;
+    for (int i = 0; i < NUM_WEIGHTS; i++) {
+        if (fabsf(rc[i]) > max_abs)
+            max_abs = fabsf(rc[i]);
+    }
+    if (fabsf(max_abs) < EPS) // Prevent division by zero if all coeffs are ~0
+        max_abs = 1.0f;
+
+    for (int i = 0; i < NUM_WEIGHTS; i++) {
+        rc[i] = rc[i] / max_abs;
+    }
+}
+
+// CUDA-compatible convolve function
+__host__ __device__ void convolve(const fixed_t data[DATA_LEN], const fixed_t filter[NUM_WEIGHTS], fixed_t result[DATA_LEN]) {
+    int mid = NUM_WEIGHTS / 2;
+
+    for (int i = 0; i < DATA_LEN; i++) {
+        fixed_t acc = 0;
+        for (int j = 0; j < NUM_WEIGHTS; j++) {
+            int k = i - mid + j;
+            if (k >= 0 && k < DATA_LEN)
+                acc += data[k] * filter[j];
+        }
+        result[i] = acc;
+    }
+}
+
+// CUDA-compatible pulse shaping function
+__host__ __device__ void pulse_shape(fixed_t i_data[DATA_LEN], fixed_t q_data[DATA_LEN], fixed_t i_out[DATA_LEN], fixed_t q_out[DATA_LEN]) {
+    fixed_t rc_filter[NUM_WEIGHTS];
+    raised_cosine_filter(rc_filter);
+    convolve(i_data, rc_filter, i_out);
+    convolve(q_data, rc_filter, q_out);
 }
