@@ -5,7 +5,11 @@
 
 // Saleh amplifier model
 // Added __host__ __device__ to the declaration to match the definition
-__host__ __device__ void saleh_amplifier(
+// Wrapped with #ifdef __CUDACC__ to ensure compatibility with both host and device compilers
+#ifdef __CUDACC__
+__host__ __device__
+#endif
+void saleh_amplifier(
     data_t in_i,
     data_t in_q,
     data_t& out_i,
