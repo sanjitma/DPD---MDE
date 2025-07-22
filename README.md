@@ -92,13 +92,7 @@ nvcc -o dpd_mde_sim \
 
 **Note**: Ensure that the paths for `i_symbols.txt` and `q_symbols.txt` in `test_for_mde.cpp` match the actual location of these files on your system, or place them in the same directory as the compiled executable.
 
-## Usage
 
-After successful compilation, run the executable:
-
-```bash
-./dpd_mde_sim
-```
 
 The program will execute the DPD simulation in three phases:
 
