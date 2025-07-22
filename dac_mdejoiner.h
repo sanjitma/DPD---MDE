@@ -6,6 +6,10 @@
 typedef float data_ty;
 
 // Multi-bit DAC with channel select (8-bit output)
-__host__ __device__ void dac_multibit_with_select(data_ty din, data_ty &dout, bool channel_select);
+// Wrapped with #ifdef __CUDACC__ to ensure compatibility with both host and device compilers
+#ifdef __CUDACC__
+__host__ __device__
+#endif
+void dac_multibit_with_select(data_ty din, data_ty &dout, bool channel_select);
 
 #endif
