@@ -3,22 +3,6 @@ Here's a comprehensive README file content for your project, formatted in Markdo
 ```markdown
 # DPD-MDE: Digital Pre-Distortion with Modified Differential Evolution (CUDA Accelerated)
 
-## Table of Contents
-- [DPD-MDE: Digital Pre-Distortion with Modified Differential Evolution (CUDA Accelerated)](#dpd-mde-digital-pre-distortion-with-modified-differential-evolution-cuda-accelerated)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Motivation](#motivation)
-  - [System Architecture](#system-architecture)
-  - [Key Features](#key-features)
-  - [CUDA Implementation Details](#cuda-implementation-details)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Build Instructions](#build-instructions)
-  - [Usage](#usage)
-  - [Output Files](#output-files)
-  - [Contributing](#contributing)
-  - [Acknowledgements](#acknowledgements)
-
 ## Overview
 
 This project implements a Digital Pre-Distortion (DPD) system designed to linearize the non-linear behavior of Power Amplifiers (PAs) in communication systems. It utilizes a novel approach based on a Modified Differential Evolution (MDE) algorithm for adaptive DPD coefficient estimation. A significant aspect of this implementation is its acceleration using NVIDIA CUDA, offloading computationally intensive signal processing blocks to the GPU for improved performance.
