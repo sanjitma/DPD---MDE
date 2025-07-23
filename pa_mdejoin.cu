@@ -1,77 +1,53 @@
-#include <stdint.h>
-#include <cmath>
+// File: C:\Modified_DE_cuda\pa_mdejoin.cu
 
-#define DATA_LEN 8192
-#define NUM_WEIGHTS 41
-#define SPS 25
-#define ALPHA 0.5
+#include "pa_mdejoiner.h"
+#include <cmath> // For sqrtf, sinf, cosf, log10f
 
-typedef float fixed_t;
+// This is the correct implementation for the Saleh Power Amplifier model.
+// It should be in this file and this file only.
+__host__ __device__ void saleh_amplifier(
+    data_t in_i,
+    data_t in_q,
+    data_t& out_i,
+    data_t& out_q,
+    data_t& magnitude,
+    data_t& gain_lin,
+    data_t& gain_db
+) {
+    // --- Saleh Model Parameters (typical values) ---
+    const float alpha_a = 2.1587f;  // AM/AM gain
+    const float beta_a  = 1.1517f;  // AM/AM compression
+    const float alpha_p = 4.0033f;  // AM/PM shift
+    const float beta_p  = 9.1040f;  // AM/PM shift
 
-// CUDA-compatible raised cosine filter
-// FIXED: Removed "default" and replaced __declspec with __host__ __device__
-__host__ __device__ void raised_cosine_filter(fixed_t rc[NUM_WEIGHTS]) {
-    const float PI = 3.14159f;
-    const float ALPHA_FIXED = ALPHA;
-    const float EPS = 1e-5f;
-    const float EPS_X = 1e-3f;
-    const float SCALE = 0.9999f;
+    // Epsilon to avoid division by zero
+    const float epsilon = 1e-9f;
 
-    int mid = NUM_WEIGHTS / 2;
-    // The 'sum' variable was unused for normalization, so it's safe to remove or ignore.
-    // float sum = 0.001f;
+    // 1. Calculate input magnitude squared and magnitude
+    data_t r_sq = in_i * in_i + in_q * in_q;
+    data_t r = sqrtf(r_sq);
 
-    for (int i = 0; i < NUM_WEIGHTS; i++) {
-        float idx = float(i - mid);
-        float x = SCALE * idx / float(SPS);
-        float pi_x = PI * x;
+    // 2. Calculate AM/AM distortion (output magnitude)
+    data_t A_r = (alpha_a * r) / (1.0f + beta_a * r_sq);
 
-        float sinc = (fabsf(x) < EPS_X) ? 1.0f : sinf(pi_x) / pi_x;
+    // 3. Calculate AM/PM distortion (phase shift in radians)
+    data_t Phi_r = (alpha_p * r_sq) / (1.0f + beta_p * r_sq);
 
-        float denom = 1.0f - 4.0f * ALPHA_FIXED * ALPHA_FIXED * x * x;
-        if (fabsf(denom) < EPS)
-            denom = EPS;
+    // 4. Apply gain and phase shift
+    data_t gain = (r > epsilon) ? (A_r / r) : alpha_a;
 
-        float angle = PI * ALPHA_FIXED * x;
-        float cos_part = cosf(angle);
+    // Apply the gain to the input samples
+    data_t g_in_i = gain * in_i;
+    data_t g_in_q = gain * in_q;
 
-        rc[i] = sinc * (cos_part / denom);
-        // sum += rc[i];
-    }
+    // Apply the phase rotation
+    float cos_phi = cosf(Phi_r);
+    float sin_phi = sinf(Phi_r);
+    out_i = g_in_i * cos_phi - g_in_q * sin_phi;
+    out_q = g_in_i * sin_phi + g_in_q * cos_phi;
 
-    // Normalize so the peak (max absolute value) is 1
-    float max_abs = 0.0f;
-    for (int i = 0; i < NUM_WEIGHTS; i++) {
-        if (fabsf(rc[i]) > max_abs)
-            max_abs = fabsf(rc[i]);
-    }
-    if (fabsf(max_abs) < EPS)
-        max_abs = 1.0f;
-
-    for (int i = 0; i < NUM_WEIGHTS; i++) {
-        rc[i] = rc[i] / max_abs;
-    }
-}
-
-// CUDA-compatible convolve function
-__host__ __device__ void convolve(const fixed_t data[DATA_LEN], const fixed_t filter[NUM_WEIGHTS], fixed_t result[DATA_LEN]) {
-    int mid = NUM_WEIGHTS / 2;
-
-    for (int i = 0; i < DATA_LEN; i++) {
-        fixed_t acc = 0;
-        for (int j = 0; j < NUM_WEIGHTS; j++) {
-            int k = i - mid + j;
-            if (k >= 0 && k < DATA_LEN)
-                acc += data[k] * filter[j];
-        }
-        result[i] = acc;
-    }
-}
-
-// CUDA-compatible pulse shaping function
-__host__ __device__ void pulse_shape(fixed_t i_data[DATA_LEN], fixed_t q_data[DATA_LEN], fixed_t i_out[DATA_LEN], fixed_t q_out[DATA_LEN]) {
-    fixed_t rc_filter[NUM_WEIGHTS];
-    raised_cosine_filter(rc_filter);
-    convolve(i_data, rc_filter, i_out);
-    convolve(q_data, rc_filter, q_out);
+    // 5. Calculate output metrics for analysis
+    magnitude = A_r;
+    gain_lin = gain;
+    gain_db = 20.0f * log10f(gain_lin > epsilon ? gain_lin : epsilon);
 }
