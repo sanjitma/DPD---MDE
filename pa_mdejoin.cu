@@ -9,7 +9,7 @@
 typedef float fixed_t;
 
 // CUDA-compatible raised cosine filter
-// Removed 'default' keyword as it's not standard C++ or CUDA syntax.
+// FIXED: Removed "default" and replaced __declspec with __host__ __device__
 __host__ __device__ void raised_cosine_filter(fixed_t rc[NUM_WEIGHTS]) {
     const float PI = 3.14159f;
     const float ALPHA_FIXED = ALPHA;
@@ -18,24 +18,25 @@ __host__ __device__ void raised_cosine_filter(fixed_t rc[NUM_WEIGHTS]) {
     const float SCALE = 0.9999f;
 
     int mid = NUM_WEIGHTS / 2;
-    // float sum = 0.001f; // This sum variable was unused for normalization, removed.
+    // The 'sum' variable was unused for normalization, so it's safe to remove or ignore.
+    // float sum = 0.001f;
 
     for (int i = 0; i < NUM_WEIGHTS; i++) {
-        float idx = (float)(i - mid);
-        float x = SCALE * idx / (float)SPS;
+        float idx = float(i - mid);
+        float x = SCALE * idx / float(SPS);
         float pi_x = PI * x;
 
-        float sinc_val = (fabsf(x) < EPS_X) ? 1.0f : sinf(pi_x) / pi_x;
+        float sinc = (fabsf(x) < EPS_X) ? 1.0f : sinf(pi_x) / pi_x;
 
         float denom = 1.0f - 4.0f * ALPHA_FIXED * ALPHA_FIXED * x * x;
         if (fabsf(denom) < EPS)
-            denom = EPS; // Prevent division by zero
+            denom = EPS;
 
         float angle = PI * ALPHA_FIXED * x;
         float cos_part = cosf(angle);
 
-        rc[i] = sinc_val * (cos_part / denom);
-        // sum += rc[i]; // This sum was not used in the original normalization logic
+        rc[i] = sinc * (cos_part / denom);
+        // sum += rc[i];
     }
 
     // Normalize so the peak (max absolute value) is 1
@@ -44,7 +45,7 @@ __host__ __device__ void raised_cosine_filter(fixed_t rc[NUM_WEIGHTS]) {
         if (fabsf(rc[i]) > max_abs)
             max_abs = fabsf(rc[i]);
     }
-    if (fabsf(max_abs) < EPS) // Prevent division by zero if all coeffs are ~0
+    if (fabsf(max_abs) < EPS)
         max_abs = 1.0f;
 
     for (int i = 0; i < NUM_WEIGHTS; i++) {
