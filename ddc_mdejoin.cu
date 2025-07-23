@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <cstdio> // For printf in debug, if needed
+#include "luts.cuh"
 
 // Configuration parameters
 #define DECIM_FACTOR 8            // Decimation factor
@@ -27,14 +28,6 @@ __constant__ filter_coeff_t d_lpf_coeffs[FIR_TAPS] = {
     -0.00079f, -0.00058f, -0.00038f, -0.00020f, -0.00006f, 0.00003f, 0.00009f, 0.00010f, 0.00009f,
     0.00006f
 }; //
-
-// Define NCO lookup tables as constant arrays in device memory
-__constant__ float d_sine_lut[NCO_LUT_SIZE] = {
-    #include "sin_lut.h" //
-};
-__constant__ float d_cosine_lut[NCO_LUT_SIZE] = {
-    #include "cos_lut.h" //
-};
 
 /**
  * Digital Downconverter (DDC) and Demodulator CUDA kernel
