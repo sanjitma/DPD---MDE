@@ -11,7 +11,7 @@
 #include "pa_mdejoiner.h"
 #include "ddc_mdejoiner.h"
 #include "adc_mdejoiner.h"
-#include "mde_kernel.cu" // Include the new kernel file
+#include "mde_kernel.cuh" // Include the new kernel file
 
 #define MAX_INPUT_BYTES 8192
 #define DATA_LEN 8192
