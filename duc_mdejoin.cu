@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cuda_runtime.h> // Include for CUDA types and functions
 #include "duc_mdejoiner.h"
+#include "luts.cuh"
 
 // Configuration parameters
 #define INTERPOLATION_FACTOR 8    // Interpolation/upsampling factor
@@ -26,14 +27,6 @@ __constant__ coeff_type d_FILTER_COEFFS[NUM_FILTER_TAPS] = {
     -0.00079f, -0.00058f, -0.00038f, -0.00020f, -0.00006f, 0.00003f, 0.00009f, 0.00010f, 0.00009f,
     0.00006f
 }; //
-
-// Sine/Cosine lookup table (pre-computed) as constant device memory
-__constant__ sample_type d_sine_lut[NCO_LUT_SIZE] = {
-    #include "sin_lut.h" //
-};
-__constant__ sample_type d_cosine_lut[NCO_LUT_SIZE] = {
-    #include "cos_lut.h" //
-};
 
 // Simple FIR filter for interpolation
 __device__ void fir_filter(
